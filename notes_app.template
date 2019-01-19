@@ -1,0 +1,14 @@
+---
+Description: AWS AppSync Notes API
+
+Parameters:
+  APIName:
+    Type: String
+    Description: "Name of the API, for generating names for resources"
+    MinLength: 3
+    MaxLength: 20
+    AllowedPatter: '^[a-zA-Z][a-zA-Z0-9_]*$'
+
+Resources:
+
+Outputs:
