@@ -7,7 +7,7 @@ Parameters:
     Description: "Name of the API, for generating names for resources"
     MinLength: 3
     MaxLength: 20
-    AllowedPatter: '^[a-zA-Z][a-zA-Z0-9_]*$'
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
 
 Resources:
   SNSRole:
@@ -42,17 +42,17 @@ Resources:
 
   UserPool:
     Type: "AWS::Cognito::UserPool"
-    Description: "A cognito user pool for authenticating users"
+    Description: "A Cognito user pool for authenticating users"
     Properties:
       UserPoolName: !Sub ${APIName}-user-pool
       AutoVerifiedAttributes:
         - phone_number
-      MfaConfiguraion: "ON"
+      MfaConfiguration: "ON"
       SmsConfiguration:
         ExternalId: !Sub ${APIName}-external
         SnsCallerArn: !GetAtt SNSRole.Arn
-        Schema:
-        - Name: Name
+      Schema:
+        - Name: name
           AttributeDataType: String
           Mutable: true
           Required: true
@@ -92,7 +92,7 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
-DynamoDBRole:
+  DynamoDBRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${APIName}-appsync-dynamodb-role
@@ -110,7 +110,7 @@ DynamoDBRole:
     DependsOn:
       - AppSyncDynamoDBPolicy
 
-AppSyncDynamoDBPolicy:
+  AppSyncDynamoDBPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: Managed policy to allow AWS AppSync to access the tables created by this template.
@@ -191,7 +191,7 @@ AppSyncDynamoDBPolicy:
       DataSourceName: !GetAtt AppSyncNotesTableDataSource.Name
       RequestMappingTemplate: |
         {
-          "version": "2012-02-28",
+          "version": "2017-02-28",
           "operation": "Query",
           "query": {
             "expression": "UserId = :id",
@@ -218,7 +218,7 @@ AppSyncDynamoDBPolicy:
       DataSourceName: !GetAtt AppSyncNotesTableDataSource.Name
       RequestMappingTemplate: |
         {
-          "version": "2012-02-28",
+          "version": "2017-02-28",
           "operation": "GetItem",
           "key": {
             "NoteId": $util.dynamodb.toDynamoDBJson($ctx.args.NoteId),
@@ -238,7 +238,7 @@ AppSyncDynamoDBPolicy:
       DataSourceName: !GetAtt AppSyncNotesTableDataSource.Name
       RequestMappingTemplate: |
         {
-          "version": "2012-02-28",
+          "version": "2017-02-28",
           "operation": "PutItem",
           "key": {
             "NoteId": $util.dynamodb.toDynamoDBJson($ctx.args.NoteId),
@@ -261,7 +261,7 @@ AppSyncDynamoDBPolicy:
       DataSourceName: !GetAtt AppSyncNotesTableDataSource.Name
       RequestMappingTemplate: |
         {
-          "version": "2012-02-28",
+          "version": "2017-02-28",
           "operation": "DeleteItem",
           "key": {
             "NoteId": $util.dynamodb.toDynamoDBJson($ctx.args.NoteId),
