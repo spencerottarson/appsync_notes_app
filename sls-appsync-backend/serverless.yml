@@ -56,8 +56,8 @@ custom:
         response: "common-response.vtl"
       - dataSource: NotesTableDS
         type: Mutation
-        field: saveNote
-        request: "saveNote-request.vtl"
+        field: createNote
+        request: "createNote-request.vtl"
         response: "common-response.vtl"
       - dataSource: NotesTableDS
         type: Mutation
@@ -102,9 +102,7 @@ resources:
       Description: "A Cognito user pool for authenticating users"
       Properties:
         UserPoolName: ${self:custom.apiname}-user-pool
-        AutoVerifiedAttributes:
-          - phone_number
-        MfaConfiguration: "ON"
+        MfaConfiguration: "OPTIONAL"
         SmsConfiguration:
           ExternalId: ${self:custom.apiname}-external
           SnsCallerArn: { Fn::GetAtt: [ SNSRole, Arn ] }
@@ -136,14 +134,14 @@ resources:
       Properties:
         TableName: ${self:custom.apiname}-notes-table
         AttributeDefinitions:
-          - AttributeName: "NoteId"
+          - AttributeName: "id"
             AttributeType: "S"
-          - AttributeName: "UserId"
+          - AttributeName: "userId"
             AttributeType: "S"
         KeySchema:
-          - AttributeName: "NoteId"
+          - AttributeName: "id"
             KeyType: "HASH"
-          - AttributeName: "UserId"
+          - AttributeName: "userId"
             KeyType: "RANGE"
         ProvisionedThroughput:
           ReadCapacityUnits: 5
