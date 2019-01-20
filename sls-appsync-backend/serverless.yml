@@ -20,85 +20,169 @@ service: sls-appsync-backend # NOTE: update this with your service name
 provider:
   name: aws
   runtime: nodejs8.10
+  region: us-east-2
 
-# you can overwrite defaults here
-#  stage: dev
-#  region: us-east-1
+plugins:
+  - serverless-appsync-plugin
 
-# you can add statements to the Lambda function's IAM Role here
-#  iamRoleStatements:
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:ListBucket"
-#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:PutObject"
-#      Resource:
-#        Fn::Join:
-#          - ""
-#          - - "arn:aws:s3:::"
-#            - "Ref" : "ServerlessDeploymentBucket"
-#            - "/*"
+custom:
+  apiname: ${self:provider.stage}-app-sync
+  accountId: { Ref: AWS::AccountId }
+  appSync:
+    name: ${self:custom.apiname}
+    authenticationType: AMAZON_COGNITO_USER_POOLS
+    userPoolConfig:
+      awsRegion: { Ref: AWS::Region }
+      defaultAction: ALLOW
+      userPoolId: { Ref: UserPool }
+    schema: schema.graphql # In case you want to change it
+    dataSources:
+      - type: AMAZON_DYNAMODB
+        name: NotesTableDS
+        description: "DynamoDB Notes Table"
+        config:
+          tableName: { Ref: DynamoDBNotesTable }
+          serviceRoleArn: { Fn::GetAtt: [ DynamoDBRole, Arn ] }
+    mappingTemplates:
+      - dataSource: NotesTableDS
+        type: Query
+        field: allNotes
+        request: "allNotes-request.vtl"
+        response: "allNotes-response.vtl"
+      - dataSource: NotesTableDS
+        type: Query
+        field: getNote
+        request: "getNote-request.vtl"
+        response: "common-response.vtl"
+      - dataSource: NotesTableDS
+        type: Mutation
+        field: saveNote
+        request: "saveNote-request.vtl"
+        response: "common-response.vtl"
+      - dataSource: NotesTableDS
+        type: Mutation
+        field: deleteNote
+        request: "deleteNote-request.vtl"
+        response: "common-response.vtl"
 
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
+resources:
+  Resources:
+    SNSRole:
+      Type: AWS::IAM::Role
+      Description: "An IAM Role to allow Cognito to send SNS messages"
+      Properties:
+        RoleName: ${self:custom.apiname}-cognito-sns-role
+        ManagedPolicyArns:
+          - Ref: CognitoSNSPolicy
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Principal:
+                Service:
+                  - cognito-idp.amazonaws.com
+      DependsOn:
+        - CognitoSNSPolicy
 
-# you can add packaging information here
-#package:
-#  include:
-#    - include-me.js
-#    - include-me-dir/**
-#  exclude:
-#    - exclude-me.js
-#    - exclude-me-dir/**
+    CognitoSNSPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: "Managed policy to allow Amazon Cognito to access SNS"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: sns:publish
+              Resource: "*"
 
-functions:
-  hello:
-    handler: handler.hello
+    UserPool:
+      Type: "AWS::Cognito::UserPool"
+      Description: "A Cognito user pool for authenticating users"
+      Properties:
+        UserPoolName: ${self:custom.apiname}-user-pool
+        AutoVerifiedAttributes:
+          - phone_number
+        MfaConfiguration: "ON"
+        SmsConfiguration:
+          ExternalId: ${self:custom.apiname}-external
+          SnsCallerArn: { Fn::GetAtt: [ SNSRole, Arn ] }
+        Schema:
+          - Name: name
+            AttributeDataType: String
+            Mutable: false
+            Required: true
+          - Name: email
+            AttributeDataType: String
+            Mutable: false
+            Required: true
+          - Name: phone_number
+            AttributeDataType: String
+            Mutable: false
+            Required: true
 
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
-#    events:
-#      - http:
-#          path: users/create
-#          method: get
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
-#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
-#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
-#      - iot:
-#          sql: "SELECT * FROM 'some_topic'"
-#      - cloudwatchEvent:
-#          event:
-#            source:
-#              - "aws.ec2"
-#            detail-type:
-#              - "EC2 Instance State-change Notification"
-#            detail:
-#              state:
-#                - pending
-#      - cloudwatchLog: '/aws/lambda/hello'
-#      - cognitoUserPool:
-#          pool: MyUserPool
-#          trigger: PreSignUp
+    UserPoolClient:
+      Type: "AWS::Cognito::UserPoolClient"
+      Description: "App Client used by AWS AppSync"
+      Properties:
+        ClientName: ${self:custom.apiname}-appsync-client
+        GenerateSecret: false
+        UserPoolId: { Ref: UserPool }
 
-#    Define function environment variables here
-#    environment:
-#      variable2: value2
+    DynamoDBNotesTable:
+      Type: "AWS::DynamoDB::Table"
+      Description: "Data store for AWS AppSync Notes Type"
+      Properties:
+        TableName: ${self:custom.apiname}-notes-table
+        AttributeDefinitions:
+          - AttributeName: "NoteId"
+            AttributeType: "S"
+          - AttributeName: "UserId"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "NoteId"
+            KeyType: "HASH"
+          - AttributeName: "UserId"
+            KeyType: "RANGE"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
 
-# you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
-#  Outputs:
-#     NewOutput:
-#       Description: "Description for the output"
-#       Value: "Some output value"
+    DynamoDBRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:custom.apiname}-appsync-dynamodb-role
+        ManagedPolicyArns:
+          - Ref: AppSyncDynamoDBPolicy
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Principal:
+                Service:
+                  - appsync.amazonaws.com
+      DependsOn:
+        - AppSyncDynamoDBPolicy
+
+    AppSyncDynamoDBPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: Managed policy to allow AWS AppSync to access the tables created by this template.
+        Path: /appsync/
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+              Resource: { Fn::Join: [ '', [ { Fn::GetAtt: [ DynamoDBNotesTable, Arn ] }, '*' ] ] }

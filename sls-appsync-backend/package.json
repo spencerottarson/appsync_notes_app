@@ -4,9 +4,14 @@
   "description": "",
   "main": "handler.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "./node_modules/.bin/serverless deploy -v"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "serverless": "^1.36.1",
+    "serverless-appsync-plugin": "^1.0.9"
+  }
 }
